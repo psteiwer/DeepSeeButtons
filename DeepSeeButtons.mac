@@ -577,17 +577,51 @@ LogDeepSeeSetupSection
 		Do WriteParagraph("deepseesetup","DeepSee Setup in "_namespace,0)
  		//Agent Count
  		ZN namespace
-	 	Set count=##class(%DeepSee.Utils).%GetAgentCount()
-	 	If count=""{
-	 		Set tCPU=##class(%SYSTEM.CPU).%New()
-	 		Set cores = tCPU.nCores
-	 		Set counthigh=cores*4
-	 		Set defaultagents="Default agent count"
-	 		Set countstring=cores_" cores x 8 = "_(counthigh*2)_" agents  ("_counthigh_" high- and "_counthigh_" low-priority agents)"
- 		} Else {
-		 	Set defaultagents="Non-default agent count"
-	 		Set countstring=(count*2)_" agents  ("_count_" high- and "_count_" low-priority agents)"
-	 	}
+		Set tCPU=##class(%SYSTEM.CPU).%New()
+		Set cores = tCPU.nCores
+		Set Maj=##class(%SYSTEM.Version).GetMajor()
+		If Maj<2019 {
+			// Pre-WQM
+			Set count=##class(%DeepSee.Utils).%GetAgentCount()
+			If count=""{
+				Set counthigh=cores*4
+				Set defaultagents="Default agent count"
+				Set countstring=cores_" cores x 8 = "_(counthigh*2)_" agents  ("_counthigh_" high- and "_counthigh_" low-priority agents)"
+			} Else {
+				Set defaultagents="Non-default agent count"
+				Set countstring=(count*2)_" agents  ("_count_" high- and "_count_" low-priority agents)"
+			}
+		} ElseIf Maj=2019 {
+			// Using WQM with no categories
+			Set count=##class(%DeepSee.Utils).%GetAgentCount()
+			If count="" {
+				Set defaultagents="Default agent count"
+				set countstring="Using Default Work Queue Manager value"
+			} Else {
+				Set defaultagents="Non-default agent count"
+				set countstring="Agent Count set to "_count
+			}
+		} Else {
+			// Using WQM with categories
+			set tBuild=##class(%DeepSee.Utils).%GetAgentCount("build")
+			set tBuildMax=##class(%DeepSee.Utils).%GetAgentCount("buildMax")
+			set tRunTime=##class(%DeepSee.Utils).%GetAgentCount("runTime")
+			set tRunTimeMax=##class(%DeepSee.Utils).%GetAgentCount("runTimeMax")
+
+			set countstring="See Work Queue Manager Categories page for more details about the Default category values."
+						_"</br>System has "_cores_" cores.</br>"
+			set tIsDefault=((tBuild="")&&(tBuildMax="")&&(tRunTime="")&&(tRunTimeMax=""))
+			If tIsDefault {
+				Set defaultagents="Default Work Queue Manager category values"
+			} Else {
+				Set defaultagents="Non-Default Work Queue Manager category values"
+				Set countstring=countstring_"</br>build: "_$select(tBuild="":"Default",1:tBuild)
+							_"</br>buildMax: "_$select(tBuildMax="":"Default",1:tBuildMax)
+							_"</br>runTime: "_$select(tRunTime="":"Default",1:tRunTime)
+							_"</br>runTimeMax: "_$select(tRunTimeMax="":"Default",1:tRunTimeMax)
+			}
+		}
+
  		ZN "%SYS"
  		Use LogFile
  		Do WriteLog("<table id=""DSSetupTable"" cellpadding=""7"" cellspacing=""3"" "_

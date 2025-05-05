@@ -1201,13 +1201,17 @@ LogBuildSynchSection
 					Set NewExtentSize = ##Class(%SQL.Manager.Catalog).GetCalcTableExtentSize($P(sqlclass,".",1), $P(sqlclass,".",2))
 					// First exclude abstract cubes and data connectors
 					If (sqlclass="Not available")||('##class(%SYSTEM.SQL).TableExists(sqlclass)) {
-						Do WriteLog("<td title='SQL class not available'></td>",10)
+						Do WriteLog("<td title='SQL class not available'>*</td>",10)
 					} ElseIf NewExtentSize>=200000 {
-						Do WriteLog("<td title='Extent Size is large'></td>",8)
+						Do WriteLog("<td title='Extent Size is large: "_NewExtentSize_"'>*</td>",8)
 					} ElseIf (NewExtentSize<10000) {
 						Do WriteUpdate("Getting COUNT(*) from source class of "_cube_". ExtentSize="_NewExtentSize)
  						Set countstar=$$GetCountStar(sqlclass)
-						Do WriteLog("<td>"_$FNUMBER(countstar,"O,")_"</td>",8)
+						If $ISVALIDNUM(countstar) {
+							Do WriteLog("<td>"_$FNUMBER(countstar,"O,")_"</td>",8)
+						} Else {
+							Do WriteLog("<td title='"_countstar_"'>*</td>",8)
+						}
 					} Else {
 						// Check if bitmap or bitmap extent index. 
 						Set tRS=##class(%ResultSet).%New("%SQL.Manager.Catalog:Indices")
@@ -1222,9 +1226,13 @@ LogBuildSynchSection
 						If hasBitmap {
 							Do WriteUpdate("Getting COUNT(*) from source class of "_cube_". ExtentSize="_NewExtentSize_", Bitmap index found")
 							Set countstar=$$GetCountStar(sqlclass)
-							Do WriteLog("<td>"_$FNUMBER(countstar,"O,")_"</td>",10)
+							If $ISVALIDNUM(countstar) {
+								Do WriteLog("<td>"_$FNUMBER(countstar,"O,")_"</td>",8)
+							} Else {
+								Do WriteLog("<td title='"_countstar_"'>*</td>",8)
+							}
 						} Else {
-							Do WriteLog("<td title='No Bitmap index found in SQL table'></td>",8)
+							Do WriteLog("<td title='No Bitmap index found in SQL table'>*</td>",8)
 						}
 					}
 					
@@ -1571,7 +1579,10 @@ LogCubeInfo
 			Do WriteLog("<p>Not available</p>",10)
 	    } Else {
 		    Set SourceFactCount=$$GetCountStar(sqlclass)
-		    Do WriteLog("<p>"_$FNUMBER(SourceFactCount,"O,")_"</p>",10)
+			If $ISVALIDNUM(SourceFactCount) {
+				Set SourceFactCount=$FNUMBER(SourceFactCount,"O,")
+			}
+		    Do WriteLog("<p>"_SourceFactCount_"</p>",10)
 	    }
 	    Do WriteLog("</td>",8)
 	    Do WriteLog("</tr>",6)
@@ -3148,11 +3159,32 @@ GetSourceClass(cube,type)[storageList, dataConnectorList]{
 }
 
 GetCountStar(sqlclass){
+	Set FactCount=""
+	Set SQLQuery="SELECT COUNT(*) As FactCount FROM "_sqlclass
+	Job GetCountStarBackground($NAMESPACE,SQLQuery)["%SYS"]
+	Set tChild=$ZCHILD
+	Set tCount=0
+	While tCount<60 {
+		Set FactCount=$G(^IRIS.Temp.DeepSeeButtonsQuery(tChild))
+		Quit:FactCount'=""
+		Set tCount=$INCREMENT(tCount)
+		Hang 1
+	}
+	If tCount=60 {
+		Set FactCount="COUNT(*) timed out"
+		Set tSC=$SYSTEM.SQL.CancelQuery(tChild)
+		Do:$$$ISERR(tSC) $SYSTEM.Process.Terminate(tChild)
+	}
+	Kill ^IRIS.Temp.DeepSeeButtonsQuery(tChild)
+
+	Quit FactCount
+}
+
+GetCountStarBackground(namespace,sql)
+	NEW $NAMESPACE Set $NAMESPACE=namespace
 	Try {
-		Set FactCount=""
-		Set SQLQuery="SELECT COUNT(*) As FactCount FROM "_sqlclass
 		Set tStatement = ##class(%SQL.Statement).%New()
-		Set st = tStatement.%Prepare(SQLQuery)
+		Set st = tStatement.%Prepare(sql)
 		If 'st {
 			Set FactCount = $System.Status.DisplayError(st)
 			Quit
@@ -3163,13 +3195,11 @@ GetCountStar(sqlclass){
 			Quit
 		}
 		Do rset.%Next()
-		Set FactCount = rset.FactCount
+		Set ^IRIS.Temp.DeepSeeButtonsQuery($JOB) = rset.FactCount
 	} Catch(ex) {
-		Set FactCount = ex.AsStatus()
-		Do $System.Status.DisplayError(tSC)
+		Set ^IRIS.Temp.DeepSeeButtonsQuery($JOB) = ex.AsStatus()
 	}
-	Quit FactCount
-}
+	Quit
 
 GetDeepSeeAuditCode
 	Kill auditcode,querycode

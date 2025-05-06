@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Export generator="Cache" version="25">
+  <Document name="DeepSeeButtons.ZPM">
+    <Module>
+      <Name>DeepSeeButtons</Name>
+      <Version>1.0.0</Version>
+      <Description>Script used by the DeepSee support group at InterSystems to gather system information.</Description>
+      <Keywords>DeepSee Buttons</Keywords>
+      <Packaging>module</Packaging>
+      <SourcesRoot>src</SourcesRoot>
+       <Resource Name="DeepSeeButtons.MAC"/>
+    </Module>
+  </Document>
+</Export>
